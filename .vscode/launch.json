@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug binary 'vscode-rust-config'",
+      "type": "lldb",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "BEVY_ASSET_ROOT": "${workspaceFolder}"
+      },
+      "cargo": {
+        "args": [
+          "run",
+          "--package=vscode-rust-config"
+        ]
+      },
+      "args": []
+    }
+  ]
+}

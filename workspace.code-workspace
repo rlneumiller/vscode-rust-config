@@ -1,0 +1,92 @@
+
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"workbench.tree.indent": 30,
+			"terminal.integrated.env.linux": {
+				"WINIT_UNIX_BACKEND": "wayland"
+			},
+		"chat.fontSize": 16,
+		"editor.inlayHints.enabled": "offUnlessPressed",
+		"editor.semanticHighlighting.enabled": false,
+		"[rust]": {
+			"editor.semanticHighlighting.enabled": false,
+		},
+		"workbench.colorCustomizations": {
+			"terminal.background": "#36014b69",
+			"terminal.foreground": "#058d0c",
+			"terminalCursor.background": "#91b101",
+			"terminalCursor.foreground": "#268102",
+		},
+		"git.repositoryPath": ["."],
+		"git.autoRepositoryDetection": false,
+		"git.scanRepositories": ["."],
+		"git.detectSubmodules": false,
+		"git.detectSubmodulesLimit": 0,
+		"git.ignoredRepositories": [
+			"./bevy_0.17.2",
+			"./big_space_0.11.0",
+			"./bevy_0.16.1",
+			"./big_space_0.10.0",
+		],
+		"window.title": "${folderName}"
+	},
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+			"label": "Startup Welcome",
+			"type": "shell",
+			"command": "echo '🚀 Welcome to the '$(basename \"${workspaceFolder}\")' Workspace'",
+			"args": [],
+			"group": "build",
+				"presentation": {
+					"echo": false,
+					"reveal": "always",
+					"focus": true,
+					"panel": "shared",
+					"showReuseMessage": false,
+					"clear": false
+				},
+				"runOptions": {
+					"runOn": "folderOpen"
+				}
+			},
+			{
+				"label": "Build Project",
+				"type": "shell",
+				"command": "cargo",
+				"args": ["build"],
+				"group": {
+					"kind": "build",
+					"isDefault": true
+				},
+				"presentation": {
+					"echo": true,
+					"reveal": "always",
+					"focus": false,
+					"panel": "shared"
+				},
+				"problemMatcher": "$rustc"
+			},
+			{
+				"label": "Run Project",
+				"type": "shell",
+				"command": "cargo",
+				"args": ["run"],
+				"group": "build",
+				"presentation": {
+					"echo": true,
+					"reveal": "always",
+					"focus": true,
+					"panel": "dedicated"
+				},
+				"problemMatcher": "$rustc"
+			}
+		]
+	}
+}
