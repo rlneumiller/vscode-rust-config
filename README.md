@@ -1,3 +1,6 @@
+# vscode-rust-config
+Warning: The workspace.code-workspace is specific to my linux system that I have configured to use wayland exclusively. You may want to edit to suit your particular system.
+
 ## Licensing
 
 Except where noted (below and/or in individual files), all source code in this repository is dual-licensed under either:
