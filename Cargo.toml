@@ -1,6 +1,6 @@
 [package]
-name = "vscode-rust-config"
-version = "0.1.0"
+name = "rust-vscode-workspace-configurator"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
@@ -9,3 +9,4 @@ serde_json = "1.0"
 clap = { version = "4.0", features = ["derive"] }
 cargo_metadata = "0.18"
 walkdir = "2.0"
+glob = "0.3"

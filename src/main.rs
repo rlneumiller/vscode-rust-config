@@ -32,7 +32,7 @@ struct LaunchConfig {
     configurations: Vec<Configuration>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct Configuration {
     name: String,
     #[serde(rename = "type")]
@@ -44,21 +44,41 @@ struct Configuration {
     args: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct EnvVars {
     #[serde(rename = "BEVY_ASSET_ROOT")]
     bevy_asset_root: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct CargoConfig {
     args: Vec<String>,
 }
 
-/// Generates VS Code launch.json configurations and workspace.code-workspace for Rust projects.
+#[derive(Serialize, Deserialize, Clone)]
+struct WorkspaceLaunchConfig {
+    version: String,
+    configurations: Vec<Configuration>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct WorkspaceFile {
+    folders: Vec<WorkspaceFolder>,
+    settings: Option<serde_json::Value>,
+    launch: Option<WorkspaceLaunchConfig>,
+    tasks: Option<serde_json::Value>,
+    extensions: Option<serde_json::Value>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct WorkspaceFolder {
+    path: String,
+}
+
+/// Generates VS Code launch configurations within workspace.code-workspace for Rust projects.
 ///
 /// This function parses command-line arguments, discovers runnables in the specified root directory,
-/// generates a launch.json file in the root directory, and copies a workspace.code-workspace file.
+/// and updates the workspace.code-workspace file with launch configurations.
 ///
 /// # Usage
 ///
@@ -85,22 +105,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  {} ({:?}) in package {}", runnable.name, runnable.runnable_type, runnable.package);
     }
     
-    let launch_config = generate_launch_config(&runnables);
-    write_launch_json(&output_dir, &launch_config)?;
+    let launch_config = generate_workspace_launch_config(&runnables);
+    write_workspace_launch_config(&output_dir, &launch_config)?;
     
-    println!("Generated .vscode/launch.json in {}", output_dir.display());
-    
-    // Copy workspace.code-workspace
-    let exe_path = std::env::current_exe()?;
-    let exe_dir = exe_path.parent().unwrap().parent().unwrap().parent().unwrap();
-    let workspace_src = exe_dir.join("workspace.code-workspace");
-    if workspace_src.exists() {
-        let workspace_dst = output_dir.join("workspace.code-workspace");
-        fs::copy(&workspace_src, &workspace_dst)?;
-        println!("Copied workspace.code-workspace to {}", output_dir.display());
-    } else {
-        eprintln!("Warning: Source workspace.code-workspace not found at {}", workspace_src.display());
-    }
+    println!("Updated workspace.code-workspace with launch configurations in {}", output_dir.display());
     
     Ok(())
 }
@@ -201,6 +209,15 @@ fn generate_launch_config(runnables: &[Runnable]) -> LaunchConfig {
     }
 }
 
+fn generate_workspace_launch_config(runnables: &[Runnable]) -> WorkspaceLaunchConfig {
+    let configurations = generate_launch_config(runnables).configurations;
+    
+    WorkspaceLaunchConfig {
+        version: "0.2.0".to_string(),
+        configurations,
+    }
+}
+
 fn write_launch_json(output_dir: &Path, launch_config: &LaunchConfig) -> Result<(), Box<dyn std::error::Error>> {
     let vscode_dir = output_dir.join(".vscode");
     fs::create_dir_all(&vscode_dir)?;
@@ -209,6 +226,36 @@ fn write_launch_json(output_dir: &Path, launch_config: &LaunchConfig) -> Result<
     let json_content = serde_json::to_string_pretty(launch_config)?;
     
     fs::write(launch_json_path, json_content)?;
+    
+    Ok(())
+}
+
+fn write_workspace_launch_config(output_dir: &Path, launch_config: &WorkspaceLaunchConfig) -> Result<(), Box<dyn std::error::Error>> {
+    let workspace_path = output_dir.join("workspace.code-workspace");
+    
+    let mut workspace_file = if workspace_path.exists() {
+        // Read existing workspace file
+        let content = fs::read_to_string(&workspace_path)?;
+        serde_json::from_str(&content)?
+    } else {
+        // Create new workspace file with basic structure
+        WorkspaceFile {
+            folders: vec![WorkspaceFolder {
+                path: ".".to_string(),
+            }],
+            settings: None,
+            launch: None,
+            tasks: None,
+            extensions: None,
+        }
+    };
+    
+    // Update the launch section
+    workspace_file.launch = Some((*launch_config).clone());
+    
+    // Write back to file
+    let json_content = serde_json::to_string_pretty(&workspace_file)?;
+    fs::write(workspace_path, json_content)?;
     
     Ok(())
 }
