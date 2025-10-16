@@ -41,7 +41,7 @@
 			{
 				"label": "Startup Welcome",
 				"type": "shell",
-				"command": "echo '🚀 Welcome to the '${basename \"${workspaceFolder}\"}' Workspace'",
+				"command": "echo \"🚀 Welcome to the $(basename \\\"${workspaceFolder}\\\") Workspace\"",
 				"args": [],
 				"group": "build",
 				"presentation": {
