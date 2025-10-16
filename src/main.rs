@@ -218,51 +218,30 @@ fn generate_workspace_launch_config(runnables: &[Runnable]) -> WorkspaceLaunchCo
     }
 }
 
-fn write_launch_json(output_dir: &Path, launch_config: &LaunchConfig) -> Result<(), Box<dyn std::error::Error>> {
-    let vscode_dir = output_dir.join(".vscode");
-    fs::create_dir_all(&vscode_dir)?;
-    
-    let launch_json_path = vscode_dir.join("launch.json");
-    let json_content = serde_json::to_string_pretty(launch_config)?;
-    
-    fs::write(launch_json_path, json_content)?;
-    
-    Ok(())
-}
-
 fn write_workspace_launch_config(output_dir: &Path, launch_config: &WorkspaceLaunchConfig) -> Result<(), Box<dyn std::error::Error>> {
     let workspace_path = output_dir.join("workspace.code-workspace");
     
-    if workspace_path.exists() {
-        let base_backup_name = "workspace.code-workspace.backup";
-        let mut backup_path = output_dir.join(base_backup_name);
-        
-        if backup_path.exists() {
-            let mut counter = 1;
-            loop {
-                backup_path = output_dir.join(format!("{}.{}", base_backup_name, counter));
-                if !backup_path.exists() {
-                    break;
-                }
-                counter += 1;
-            }
+    let mut workspace_file = if workspace_path.exists() {
+        // Read existing workspace file
+        let content = fs::read_to_string(&workspace_path)?;
+        serde_json::from_str(&content)?
+    } else {
+        // Create new workspace file with basic structure
+        WorkspaceFile {
+            folders: vec![WorkspaceFolder {
+                path: ".".to_string(),
+            }],
+            settings: None,
+            launch: None,
+            tasks: None,
+            extensions: Some(serde_json::Value::Object(serde_json::Map::new())),
         }
-        
-        fs::rename(&workspace_path, &backup_path)?;
-        println!("Backed up existing workspace.code-workspace to {}", backup_path.display());
-    }
-    
-    // Read the template workspace file
-    let template_path = output_dir.join("workspace.code-workspace.template");
-    let template_content = fs::read_to_string(&template_path)
-        .map_err(|e| format!("Failed to read template file {}: {}", template_path.display(), e))?;
-    let mut workspace_file: WorkspaceFile = serde_json::from_str(&template_content)
-        .map_err(|e| format!("Failed to parse template file {}: {}", template_path.display(), e))?;
+    };
     
     // Update the launch section
     workspace_file.launch = Some((*launch_config).clone());
     
-    // Write to file
+    // Write back to file
     let json_content = serde_json::to_string_pretty(&workspace_file)?;
     fs::write(workspace_path, json_content)?;
     
