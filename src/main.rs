@@ -1,4 +1,4 @@
-use cargo_metadata::{CargoOpt, MetadataCommand};
+use cargo_metadata::{CargoOpt, MetadataCommand, TargetKind};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -134,19 +134,19 @@ fn discover_runnables(root_dir: &Path) -> Result<Vec<Runnable>, Box<dyn std::err
 
     // Process only the root package
     for target in &root_package.targets {
-        if target.kind.contains(&"bin".to_string()) {
+        if target.kind.contains(&TargetKind::Bin) {
             runnables.push(Runnable {
                 name: target.name.clone(),
-                package: root_package.name.clone(),
+                package: root_package.name.to_string(),
                 runnable_type: RunnableType::Binary,
             });
         }
 
         // Add example targets
-        if target.kind.contains(&"example".to_string()) {
+        if target.kind.contains(&TargetKind::Example) {
             runnables.push(Runnable {
                 name: target.name.clone(),
-                package: root_package.name.clone(),
+                package: root_package.name.to_string(),
                 runnable_type: RunnableType::Example,
             });
         }
@@ -222,6 +222,24 @@ fn write_workspace_launch_config(output_dir: &Path, launch_config: &WorkspaceLau
     let workspace_path = output_dir.join("workspace.code-workspace");
     
     let mut workspace_file = if workspace_path.exists() {
+        // Create backup of existing workspace file
+        let base_backup_name = "workspace.code-workspace.backup";
+        let mut backup_path = output_dir.join(base_backup_name);
+        
+        if backup_path.exists() {
+            let mut counter = 1;
+            loop {
+                backup_path = output_dir.join(format!("{}.{}", base_backup_name, counter));
+                if !backup_path.exists() {
+                    break;
+                }
+                counter += 1;
+            }
+        }
+        
+        fs::copy(&workspace_path, &backup_path)?;
+        println!("Backed up existing workspace.code-workspace to {}", backup_path.display());
+        
         // Read existing workspace file
         let content = fs::read_to_string(&workspace_path)?;
         serde_json::from_str(&content)?
