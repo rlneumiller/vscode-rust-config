@@ -3,6 +3,7 @@
 A command-line tool to generate VS Code launch configurations for Rust projects by embedding them directly into `workspace.code-workspace` files instead of separate `.vscode/launch.json` file.
 
 ## WARNING
+
 - Be aware the this is a tool that I use to configure my workspaces to suit my personal preferences.
 - It should work fine as is but you may want to edit to suit your specific desires.
 - If you have a pre- existing `.code-workspace` file this tool will rename it by adding a `.backup` extension to it. You can then diff it with the new `workspace.code-workspace` file that this tool creates and transfer over your customizations as desired.
@@ -13,8 +14,7 @@ A command-line tool to generate VS Code launch configurations for Rust projects 
 
 - Discovers binaries and examples in Rust projects using Cargo metadata
 - Generates debug configurations for LLDB (assumes you have installed the CodeLLDB extension)
-- Updates existing `workspace.code-workspace` files or creates new ones
-- Supports workspace-wide settings and tasks
+- Create `workspace.code-workspace` file and renames existing `.code-workspace` files to `<workspace_name>.code-workspace.backup`
 
 ## Installation
 
@@ -47,9 +47,10 @@ cargo run -- --root /path/to/rust/project
 If no `--root` is specified, it defaults to the current directory.
 
 The tool will:
+
 1. Search for Rust runnables (binaries and examples)
 2. Generate launch configurations
-3. Update or create the `workspace.code-workspace` file
+3. Create the `workspace.code-workspace` file
 
 ## Example
 
@@ -62,7 +63,7 @@ cargo run
 # Found 2 runnables:
 #   my_binary (Binary) in package my_project
 #   example1 (Example) in package my_project
-# Updated workspace.code-workspace with launch configurations in /current/directory
+# Created workspace.code-workspace with launch configurations in /current/directory
 ```
 
 ## Dependencies
@@ -72,4 +73,5 @@ cargo run
 - `cargo_metadata` for accessing Cargo project metadata
 
 ## License
+
 MIT or Apache 2.0 - your choice

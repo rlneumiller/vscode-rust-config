@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
-#[command(name = "vscode-rust-config")]
+#[command(name = "rust-vscode-workspace-configurator")]
 #[command(about = "Generate VS Code launch.json and workspace.code-workspace for Rust projects")]
 struct Args {
     /// Root directory to search for Rust projects (defaults to current directory)
@@ -82,7 +82,7 @@ struct WorkspaceFolder {
 ///
 /// # Usage
 ///
-/// vscode-rust-config [--root <ROOT>]
+/// rust-vscode-workspace-configurator [--root <ROOT>]
 ///
 /// - `--root`: Root directory to search for Rust projects (defaults to current directory)
 fn main() -> Result<(), Box<dyn std::error::Error>> {
