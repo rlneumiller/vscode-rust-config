@@ -18,6 +18,7 @@ struct Runnable {
     name: String,
     package: String,
     runnable_type: RunnableType,
+    required_features: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -139,6 +140,7 @@ fn discover_runnables(root_dir: &Path) -> Result<Vec<Runnable>, Box<dyn std::err
                 name: target.name.clone(),
                 package: root_package.name.to_string(),
                 runnable_type: RunnableType::Binary,
+                required_features: target.required_features.clone(),
             });
         }
 
@@ -148,6 +150,7 @@ fn discover_runnables(root_dir: &Path) -> Result<Vec<Runnable>, Box<dyn std::err
                 name: target.name.clone(),
                 package: root_package.name.to_string(),
                 runnable_type: RunnableType::Example,
+                required_features: target.required_features.clone(),
             });
         }
     }
@@ -169,14 +172,23 @@ fn generate_launch_config(runnables: &[Runnable]) -> LaunchConfig {
                     bevy_asset_root: "${workspaceFolder}".to_string(),
                 },
                 cargo: CargoConfig {
-                    args: if runnable.name == "main" || runnable.name == runnable.package {
-                        vec!["run".to_string(), format!("--package={}", runnable.package)]
-                    } else {
-                        vec![
-                            "run".to_string(),
-                            format!("--bin={}", runnable.name),
-                            format!("--package={}", runnable.package),
-                        ]
+                    args: {
+                        let mut args = if runnable.name == "main" || runnable.name == runnable.package {
+                            vec!["run".to_string(), format!("--package={}", runnable.package)]
+                        } else {
+                            vec![
+                                "run".to_string(),
+                                format!("--bin={}", runnable.name),
+                                format!("--package={}", runnable.package),
+                            ]
+                        };
+
+                        if !runnable.required_features.is_empty() {
+                            let feats = runnable.required_features.join(",");
+                            args.push(format!("--features={}", feats));
+                        }
+
+                        args
                     },
                 },
                 args: vec![],
@@ -190,11 +202,20 @@ fn generate_launch_config(runnables: &[Runnable]) -> LaunchConfig {
                     bevy_asset_root: "${workspaceFolder}".to_string(),
                 },
                 cargo: CargoConfig {
-                    args: vec![
-                        "run".to_string(),
-                        format!("--example={}", runnable.name),
-                        format!("--package={}", runnable.package),
-                    ],
+                    args: {
+                        let mut args = vec![
+                            "run".to_string(),
+                            format!("--example={}", runnable.name),
+                            format!("--package={}", runnable.package),
+                        ];
+
+                        if !runnable.required_features.is_empty() {
+                            let feats = runnable.required_features.join(",");
+                            args.push(format!("--features={}", feats));
+                        }
+
+                        args
+                    },
                 },
                 args: vec![],
             },

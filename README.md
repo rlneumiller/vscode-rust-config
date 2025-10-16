@@ -4,6 +4,7 @@ A command-line tool to generate VS Code launch configurations for Rust projects 
 
 ## WARNING
 
+- Has only been tested in a modified debian 12 linux distro
 - Be aware the this is a tool that I use to configure my workspaces to suit my personal preferences.
 - It should work fine as is but you may want to edit to suit your specific desires.
 - If you have a pre- existing `.code-workspace` file this tool will rename it by adding a `.backup` extension to it. You can then diff it with the new `workspace.code-workspace` file that this tool creates and transfer over your customizations as desired.
