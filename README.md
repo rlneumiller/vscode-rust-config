@@ -1,6 +1,6 @@
 # Rust VS Code Workspace Configurator
 
-A command-line tool to generate VS Code launch configurations for Rust projects by embedding them directly into `workspace.code-workspace` files instead of separate `.vscode/launch.json` file.
+A command-line tool to generate VS Code launch configurations for Rust projects by embedding them directly into `workspace.code-workspace` files under a `"launch"` section, instead of creating a separate `.vscode/launch.json` file.
 
 ## WARNING
 
