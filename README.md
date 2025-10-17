@@ -1,20 +1,26 @@
 # Rust VS Code Workspace Configurator
 
-A small command-line tool that discovers Rust binaries and examples (for the package whose `Cargo.toml` you point it at) and embeds VS Code launch configurations into a `workspace.code-workspace` file under a `"launch"` section.
+A command-line tool that recursively discovers Rust projects and creates VS Code multi-root workspace configurations with launch configurations for all discovered binaries and examples.
 
 ## Important notes
 
-- The tool examines the package located at the provided `--root` manifest path (or the current working directory if `--root` is not supplied). It does not scan sibling packages in a multi-package workspace — it only processes the package whose `Cargo.toml` you pass in.
+- The tool searches recursively for Rust projects (directories containing `Cargo.toml` files) starting from the provided `--root` directory (or the current working directory if `--root` is not supplied).
+- If the root directory itself contains a `Cargo.toml`, it processes that project directly. Otherwise, it scans subdirectories to find all Rust projects.
+- Creates a multi-root VS Code workspace with separate folders for each discovered Rust project.
 - If a `workspace.code-workspace` file already exists at the output location, the tool makes a backup named `workspace.code-workspace.backup`. If that name is already taken it will append `.1`, `.2`, etc. until an unused name is found (e.g. `workspace.code-workspace.backup.1`).
 - Generated launch configurations target the `lldb` debugger and assume you have an LLDB adapter in VS Code (for example, the CodeLLDB extension).
-- The generated launch configurations set an environment variable `BEVY_ASSET_ROOT` to `${workspaceFolder}`. This is included because some Rust projects (notably those using Bevy) expect an asset root; you can remove or modify this value in the resulting `workspace.code-workspace` file if it is not applicable to your project.
+- The generated launch configurations set an environment variable `BEVY_ASSET_ROOT` to the appropriate project directory. This is included because some Rust projects (notably those using Bevy) expect an asset root; you can remove or modify this value in the resulting `workspace.code-workspace` file if it is not applicable to your projects.
 - If a target (binary or example) declares required Cargo features, the tool appends a `--features=<comma-separated-features>` argument to the cargo invocation in the launch configuration.
+- Launch configurations are namespaced with the project name to avoid conflicts when multiple projects have targets with the same name.
 
 ## Features
 
-- Discovers `bin` targets and `example` targets for the package at the provided `Cargo.toml` using `cargo_metadata`.
-- Generates LLDB-compatible debug configurations that run `cargo run` for the selected target and package.
+- Recursively discovers all Rust projects (directories containing `Cargo.toml` files) in the specified directory tree.
+- Discovers `bin` targets and `example` targets for each found project using `cargo_metadata`.
+- Generates LLDB-compatible debug configurations that run `cargo run` for each target with appropriate project-relative paths.
+- Creates multi-root VS Code workspaces with proper folder structure for all discovered projects.
 - Writes (or updates) a `workspace.code-workspace` file and preserves an existing file by creating a numerical backup as described above.
+- Handles malformed existing workspace files gracefully by creating backups and starting fresh.
 
 ## Installation
 
@@ -44,76 +50,104 @@ cargo install --path .
 
 ## Usage
 
-Run the tool pointing at the package root (defaults to current directory). You can use the long `--root <PATH>` or the short `-r <PATH>` flag.
+Run the tool pointing at a directory containing Rust projects (defaults to current directory). You can use the long `--root <PATH>` or the short `-r <PATH>` flag.
 
 ```bash
-# specifying a root path (long form)
-rust-vscode-workspace-configurator --root /path/to/rust/project
+# specifying a root path (long form) - will search for all Rust projects in this directory
+rust-vscode-workspace-configurator --root /path/to/directory/containing/rust/projects
 
 # specifying a root path (short form)
-rust-vscode-workspace-configurator -r /path/to/rust/project
+rust-vscode-workspace-configurator -r /path/to/directory/containing/rust/projects
 
-# or from inside a project directory (uses current directory)
+# or from inside a directory (uses current directory)
 rust-vscode-workspace-configurator
 ```
 
 The tool will:
 
-1. Require that a `Cargo.toml` exists at the specified root. It returns an error if no manifest (Cargo.toml) is found there.
-2. Use `cargo metadata` (requesting all features) to discover `bin` and `example` targets for the single package whose `Cargo.toml` you provided. It does not scan sibling packages in a workspace.
-3. Generate a `launch` section compatible with VS Code that invokes `cargo run` with appropriate `--package`, `--bin` or `--example` arguments. If a target declares required features, the tool appends a `--features=<comma-separated-features>` argument.
-4. Write or update `workspace.code-workspace` in the specified root, creating a backup of any existing file named `workspace.code-workspace.backup` and adding numeric suffixes (`.1`, `.2`, ...) if needed.
+1. Check if the specified root directory contains a `Cargo.toml`. If so, it processes that project directly.
+2. If no `Cargo.toml` is found in the root, it recursively searches subdirectories for Rust projects (directories containing `Cargo.toml` files).
+3. Use `cargo metadata` (requesting all features) to discover `bin` and `example` targets for each found project.
+4. Generate namespaced launch configurations compatible with VS Code that invoke `cargo run` with appropriate `--package`, `--bin` or `--example` arguments. If a target declares required features, the tool appends a `--features=<comma-separated-features>` argument.
+5. Create a multi-root workspace configuration with separate folders for each discovered project.
+6. Write or update `workspace.code-workspace` in the specified root, creating a backup of any existing file named `workspace.code-workspace.backup` and adding numeric suffixes (`.1`, `.2`, ...) if needed.
 
 ## Example output
 
-When run in a project containing a binary `my_binary` and an example `example1` you might see:
+When run in a directory containing multiple Rust projects, you might see:
 
 ```text
-Searching for Rust projects in: /path/to/project
-Found 2 runnables:
-  my_binary (Binary) in package my_project
-  example1 (Example) in package my_project
-Backed up existing workspace.code-workspace to workspace.code-workspace.backup
-Created workspace.code-workspace with launch configurations in /path/to/project
+Searching for Rust projects in: /path/to/projects
+Found 3 Rust project(s):
+  /path/to/projects/project1
+  /path/to/projects/project2
+  /path/to/projects/project3
+Found 5 runnables:
+  project1::my_binary (Binary) in package project1
+  project1::example1 (example) (Example) in package project1
+  project2::server (Binary) in package project2
+  project3::cli_tool (Binary) in package project3
+  project3::integration_test (example) (Example) in package project3
+Backed up existing workspace.code-workspace to workspace.code-workspace.backup.1
+Created workspace.code-workspace with launch configurations in /path/to/projects
 ```
 
-And `workspace.code-workspace` will contain a top-level `launch` object similar to the following.
+And `workspace.code-workspace` will contain a multi-root workspace configuration with a top-level `launch` object similar to the following.
 
-Here is a short, pretty-printed example `workspace.code-workspace` showing two configurations: one for a binary named `my_binary` and one for an example named `example1`. The binary declares a required feature `cool-feature`, which is included in `--features`.
+Here is a short, pretty-printed example `workspace.code-workspace` showing a multi-root workspace with three projects and their launch configurations. Note how each project gets its own folder and launch configurations are namespaced:
 
 ```json
 {
-  "folders": [ { "path": "." } ],
+  "folders": [
+    { "path": "./project1" },
+    { "path": "./project2" },
+    { "path": "./project3" }
+  ],
   "launch": {
     "version": "0.2.0",
     "configurations": [
       {
-        "name": "Debug binary 'my_binary'",
+        "name": "Debug binary 'project1::my_binary'",
         "type": "lldb",
         "request": "launch",
-        "cwd": "${workspaceFolder}",
-        "env": { "BEVY_ASSET_ROOT": "${workspaceFolder}" },
+        "cwd": "${workspaceFolder}/project1",
+        "env": { "BEVY_ASSET_ROOT": "${workspaceFolder}/project1" },
         "cargo": {
           "args": [
             "run",
             "--bin=my_binary",
-            "--package=my_project",
+            "--package=project1",
             "--features=cool-feature"
           ]
         },
         "args": []
       },
       {
-        "name": "Debug example 'example1'",
+        "name": "Debug example 'project1::example1 (example)'",
         "type": "lldb",
         "request": "launch",
-        "cwd": "${workspaceFolder}",
-        "env": { "BEVY_ASSET_ROOT": "${workspaceFolder}" },
+        "cwd": "${workspaceFolder}/project1",
+        "env": { "BEVY_ASSET_ROOT": "${workspaceFolder}/project1" },
         "cargo": {
           "args": [
             "run",
             "--example=example1",
-            "--package=my_project"
+            "--package=project1"
+          ]
+        },
+        "args": []
+      },
+      {
+        "name": "Debug binary 'project2::server'",
+        "type": "lldb",
+        "request": "launch",
+        "cwd": "${workspaceFolder}/project2",
+        "env": { "BEVY_ASSET_ROOT": "${workspaceFolder}/project2" },
+        "cargo": {
+          "args": [
+            "run",
+            "--bin=server",
+            "--package=project2"
           ]
         },
         "args": []
@@ -125,15 +159,18 @@ Here is a short, pretty-printed example `workspace.code-workspace` showing two c
 
 Notes:
 
-- Generated configurations are named `Debug binary '<name>'` or `Debug example '<name>'`.
-- Each configuration sets `type` to `lldb`, `request` to `launch`, `cwd` to `${workspaceFolder}`, and includes `env.BEVY_ASSET_ROOT` = `${workspaceFolder}` by default.
+- Generated configurations are named `Debug binary '<project>::<name>'` or `Debug example '<project>::<name> (example)'` to avoid naming conflicts between projects.
+- Each configuration sets `type` to `lldb`, `request` to `launch`, and `cwd` to the appropriate project directory relative to the workspace folder.
+- The `env.BEVY_ASSET_ROOT` is set to the project directory to ensure assets are loaded correctly for each project.
 - The `cargo.args` array contains the `cargo run` subcommand and flags; `--features` is added when targets declare required features.
+- Multi-root workspaces allow you to work with multiple Rust projects simultaneously while maintaining proper project isolation.
 
 ## Dependencies
 
 - `serde` and `serde_json` for JSON handling
 - `clap` for command-line parsing
 - `cargo_metadata` for reading Cargo metadata
+- `pathdiff` for calculating relative paths between directories
 
 ## License
 
