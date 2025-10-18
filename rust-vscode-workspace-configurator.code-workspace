@@ -19,7 +19,8 @@
         "cargo": {
           "args": [
             "run",
-            "--package=rust-vscode-workspace-configurator"
+            "--package=rust-vscode-workspace-configurator",
+            "--manifest-path=${workspaceFolder}/Cargo.toml"
           ]
         },
         "args": []

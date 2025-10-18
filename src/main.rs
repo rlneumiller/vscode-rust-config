@@ -313,6 +313,13 @@ fn generate_launch_config(runnables: &[Runnable], root_dir: &Path) -> LaunchConf
             format!("${{workspaceFolder}}/{}", relative_path.display())
         };
         
+        // Generate manifest path argument for cargo
+        let manifest_path_arg = if relative_path == Path::new("") || relative_path == Path::new(".") {
+            format!("--manifest-path=${{workspaceFolder}}/Cargo.toml")
+        } else {
+            format!("--manifest-path=${{workspaceFolder}}/{}/Cargo.toml", relative_path.display())
+        };
+        
         let config = match runnable.runnable_type {
             RunnableType::Binary => {
                 // Extract the actual binary name from the prefixed name
@@ -341,6 +348,9 @@ fn generate_launch_config(runnables: &[Runnable], root_dir: &Path) -> LaunchConf
                                 let feats = runnable.required_features.join(",");
                                 args.push(format!("--features={}", feats));
                             }
+
+                            // Add manifest path to ensure proper workspace context
+                            args.push(manifest_path_arg.clone());
 
                             args
                         },
@@ -373,6 +383,9 @@ fn generate_launch_config(runnables: &[Runnable], root_dir: &Path) -> LaunchConf
                                 let feats = runnable.required_features.join(",");
                                 args.push(format!("--features={}", feats));
                             }
+
+                            // Add manifest path to ensure proper workspace context
+                            args.push(manifest_path_arg);
 
                             args
                         },
