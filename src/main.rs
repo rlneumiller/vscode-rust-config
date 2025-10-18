@@ -66,9 +66,15 @@ struct WorkspaceLaunchConfig {
 #[derive(Serialize, Deserialize)]
 struct WorkspaceFile {
     folders: Vec<WorkspaceFolder>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     settings: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     launch: Option<WorkspaceLaunchConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     tasks: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     extensions: Option<serde_json::Value>,
 }
 
@@ -118,7 +124,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let launch_config = generate_workspace_launch_config(&runnables, &root_dir);
     write_workspace_launch_config(&output_dir, &launch_config, &runnables, &root_dir)?;
     
-    println!("Created workspace.code-workspace with launch configurations in {}", output_dir.display());
+    let workspace_filename = generate_workspace_filename(&root_dir);
+    println!("Created {} with launch configurations in {}", workspace_filename, output_dir.display());
     
     Ok(())
 }
@@ -161,36 +168,68 @@ fn discover_runnables(root_dir: &Path) -> Result<Vec<Runnable>, Box<dyn std::err
                 }
             };
 
-        // Find the package corresponding to this manifest
-        let root_package = match metadata.packages.iter().find(|p| p.manifest_path == manifest_path) {
-            Some(package) => package,
-            None => {
-                eprintln!("Warning: Could not find package for manifest {}", manifest_path.display());
-                continue;
+        // Canonicalize the project path for consistent comparison
+        let canonical_project_path = project_path.canonicalize().unwrap_or_else(|_| project_path.clone());
+
+        // Handle both workspace and single package cases
+        let packages_to_process: Vec<&cargo_metadata::Package> = if metadata.workspace_members.is_empty() {
+            // Single package project - find the package that matches this manifest path
+            // Try to canonicalize paths to handle different path representations
+            let canonical_manifest = manifest_path.canonicalize().unwrap_or(manifest_path.clone());
+            
+            match metadata.packages.iter().find(|p| {
+                let pkg_manifest_canonical = p.manifest_path.as_std_path().canonicalize()
+                    .unwrap_or_else(|_| p.manifest_path.as_std_path().to_path_buf());
+                pkg_manifest_canonical == canonical_manifest
+            }) {
+                Some(package) => vec![package],
+                None => {
+                    eprintln!("Warning: Could not find package for manifest {}", manifest_path.display());
+                    continue;
+                }
             }
+        } else {
+            // Workspace project - process all workspace members that are in this project directory
+            metadata.packages.iter()
+                .filter(|p| {
+                    // Check if this package's manifest is under the current project path
+                    let pkg_manifest_dir = p.manifest_path.parent().unwrap_or(&p.manifest_path);
+                    let pkg_canonical_dir = pkg_manifest_dir.as_std_path().canonicalize()
+                        .unwrap_or_else(|_| pkg_manifest_dir.as_std_path().to_path_buf());
+                    pkg_canonical_dir.starts_with(&canonical_project_path)
+                })
+                .collect()
         };
 
-        // Process targets for this package
-        for target in &root_package.targets {
-            if target.kind.contains(&TargetKind::Bin) {
-                runnables.push(Runnable {
-                    name: format!("{}::{}", root_package.name, target.name),
-                    package: root_package.name.to_string(),
-                    runnable_type: RunnableType::Binary,
-                    required_features: target.required_features.clone(),
-                    project_path: project_path.clone(),
-                });
-            }
+        if packages_to_process.is_empty() {
+            eprintln!("Warning: No packages found for project {}", project_path.display());
+            continue;
+        }
 
-            // Add example targets
-            if target.kind.contains(&TargetKind::Example) {
-                runnables.push(Runnable {
-                    name: format!("{}::{} (example)", root_package.name, target.name),
-                    package: root_package.name.to_string(),
-                    runnable_type: RunnableType::Example,
-                    required_features: target.required_features.clone(),
-                    project_path: project_path.clone(),
-                });
+        // Process targets for each package
+        for package in packages_to_process {
+            // Process targets for this package
+            for target in &package.targets {
+                if target.kind.contains(&TargetKind::Bin) {
+                    runnables.push(Runnable {
+                        name: format!("{}::{}", package.name, target.name),
+                        package: package.name.to_string(),
+                        runnable_type: RunnableType::Binary,
+                        required_features: target.required_features.clone(),
+                        project_path: project_path.clone(),
+                    });
+                }
+
+                // Add example targets
+                if target.kind.contains(&TargetKind::Example) {
+                    runnables.push(Runnable {
+                        name: format!("{}::{} (example)", package.name, target.name),
+                        package: package.name.to_string(),
+                        runnable_type: RunnableType::Example,
+                        required_features: target.required_features.clone(),
+                        project_path: project_path.clone(),
+                    });
+                }
             }
         }
     }
@@ -234,6 +273,27 @@ fn find_rust_projects_recursive(dir: &Path, projects: &mut Vec<PathBuf>) -> Resu
     }
 
     Ok(())
+}
+
+fn generate_workspace_name(root_dir: &Path, project_paths: &[PathBuf]) -> String {
+    // If only one project, use its name
+    if project_paths.len() == 1 {
+        if let Some(project_name) = project_paths[0].file_name().and_then(|n| n.to_str()) {
+            return format!("{} (Rust)", project_name);
+        }
+    }
+    
+    // For multiple projects, use the root directory name with project count
+    let root_name = root_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("Rust Projects");
+    
+    if project_paths.len() > 1 {
+        format!("{} ({} Rust Projects)", root_name, project_paths.len())
+    } else {
+        format!("{} (Rust)", root_name)
+    }
 }
 
 fn generate_launch_config(runnables: &[Runnable], root_dir: &Path) -> LaunchConfig {
@@ -339,13 +399,23 @@ fn generate_workspace_launch_config(runnables: &[Runnable], root_dir: &Path) -> 
     }
 }
 
+fn generate_workspace_filename(root_dir: &Path) -> String {
+    let root_name = root_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("rust-projects");
+    
+    format!("{}.code-workspace", root_name)
+}
+
 fn write_workspace_launch_config(output_dir: &Path, launch_config: &WorkspaceLaunchConfig, runnables: &[Runnable], root_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let workspace_path = output_dir.join("workspace.code-workspace");
+    let workspace_filename = generate_workspace_filename(root_dir);
+    let workspace_path = output_dir.join(&workspace_filename);
     
     let mut workspace_file = if workspace_path.exists() {
         // Create backup of existing workspace file
-        let base_backup_name = "workspace.code-workspace.backup";
-        let mut backup_path = output_dir.join(base_backup_name);
+        let base_backup_name = format!("{}.backup", workspace_filename);
+        let mut backup_path = output_dir.join(&base_backup_name);
         
         if backup_path.exists() {
             let mut counter = 1;
@@ -371,10 +441,11 @@ fn write_workspace_launch_config(output_dir: &Path, launch_config: &WorkspaceLau
                 // Create new workspace file with basic structure
                 WorkspaceFile {
                     folders: vec![],
+                    name: None,
                     settings: None,
                     launch: None,
                     tasks: None,
-                    extensions: Some(serde_json::Value::Object(serde_json::Map::new())),
+                    extensions: None,
                 }
             }
         }
@@ -382,10 +453,11 @@ fn write_workspace_launch_config(output_dir: &Path, launch_config: &WorkspaceLau
         // Create new workspace file with basic structure
         WorkspaceFile {
             folders: vec![],
+            name: None,
             settings: None,
             launch: None,
             tasks: None,
-            extensions: Some(serde_json::Value::Object(serde_json::Map::new())),
+            extensions: None,
         }
     };
     
@@ -396,9 +468,13 @@ fn write_workspace_launch_config(output_dir: &Path, launch_config: &WorkspaceLau
     project_paths.sort();
     project_paths.dedup();
     
+    // Generate workspace name
+    let workspace_name = generate_workspace_name(root_dir, &project_paths);
+    workspace_file.name = Some(workspace_name);
+    
     // Create folders for all discovered projects
     let mut folders = Vec::new();
-    for project_path in project_paths {
+    for project_path in &project_paths {
         let relative_path = match pathdiff::diff_paths(&project_path, root_dir) {
             Some(path) if path != Path::new("") && path != Path::new(".") => format!("./{}", path.display()),
             _ => ".".to_string(),
@@ -417,6 +493,17 @@ fn write_workspace_launch_config(output_dir: &Path, launch_config: &WorkspaceLau
     }
     
     workspace_file.folders = folders;
+    
+    // Clean up null/empty fields to follow VS Code conventions
+    if workspace_file.settings.as_ref().map_or(false, |s| s.is_null()) {
+        workspace_file.settings = None;
+    }
+    if workspace_file.tasks.as_ref().map_or(false, |t| t.is_null()) {
+        workspace_file.tasks = None;
+    }
+    if workspace_file.extensions.as_ref().map_or(false, |e| e.is_null() || (e.is_object() && e.as_object().unwrap().is_empty())) {
+        workspace_file.extensions = None;
+    }
     
     // Update the launch section
     workspace_file.launch = Some((*launch_config).clone());

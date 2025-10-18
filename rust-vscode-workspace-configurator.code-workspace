@@ -1,0 +1,29 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "name": "rust-vscode-workspace-configurator (Rust)",
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Debug binary 'rust-vscode-workspace-configurator::rust-vscode-workspace-configurator'",
+        "type": "lldb",
+        "request": "launch",
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "BEVY_ASSET_ROOT": "${workspaceFolder}"
+        },
+        "cargo": {
+          "args": [
+            "run",
+            "--package=rust-vscode-workspace-configurator"
+          ]
+        },
+        "args": []
+      }
+    ]
+  }
+}
