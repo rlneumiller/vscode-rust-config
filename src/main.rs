@@ -1,5 +1,6 @@
 use cargo_metadata::{CargoOpt, MetadataCommand, TargetKind};
 use clap::Parser;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -429,26 +430,44 @@ fn write_workspace_launch_config(output_dir: &Path, launch_config: &WorkspaceLau
         }
         
         fs::copy(&workspace_path, &backup_path)?;
-        println!("Backed up existing workspace.code-workspace to {}", backup_path.display());
+        println!("Backed up existing workspace file to {}", backup_path.display());
         
         // Read existing workspace file
         let content = fs::read_to_string(&workspace_path)?;
-        match serde_json::from_str(&content) {
+        
+        // Try to parse the JSON, with a fallback to clean up common issues
+        let workspace = match serde_json::from_str(&content) {
             Ok(workspace) => workspace,
-            Err(e) => {
-                eprintln!("Warning: Failed to parse existing workspace.code-workspace: {}", e);
-                eprintln!("Creating a new workspace file instead.");
-                // Create new workspace file with basic structure
-                WorkspaceFile {
-                    folders: vec![],
-                    name: None,
-                    settings: None,
-                    launch: None,
-                    tasks: None,
-                    extensions: None,
+            Err(parse_err) => {
+                // Try to fix common JSON issues like trailing commas
+                eprintln!("Warning: Failed to parse existing workspace file: {}", parse_err);
+                
+                // Use regex to remove trailing commas more reliably
+                let trailing_comma_re = Regex::new(r",(\s*[}\]])").unwrap();
+                let cleaned = trailing_comma_re.replace_all(&content, "$1").to_string();
+                
+                match serde_json::from_str(&cleaned) {
+                    Ok(workspace) => {
+                        eprintln!("Successfully recovered by removing trailing commas");
+                        workspace
+                    },
+                    Err(e) => {
+                        eprintln!("Warning: Failed to parse existing workspace file even after cleanup: {}", e);
+                        eprintln!("Creating a new workspace file instead.");
+                        // Create new workspace file with basic structure
+                        WorkspaceFile {
+                            folders: vec![],
+                            name: None,
+                            settings: None,
+                            launch: None,
+                            tasks: None,
+                            extensions: None,
+                        }
+                    }
                 }
             }
-        }
+        };
+        workspace
     } else {
         // Create new workspace file with basic structure
         WorkspaceFile {
